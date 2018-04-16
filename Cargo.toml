@@ -1,0 +1,8 @@
+[package]
+name = "alco"
+version = "0.1.0"
+authors = ["Kevin Gori <kgori@ebi.ac.uk>"]
+
+[dependencies]
+rust-htslib = "*"
+clap = "2.31.2"
