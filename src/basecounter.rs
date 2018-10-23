@@ -32,6 +32,7 @@ impl BaseCounter {
                        self.n_a, self.n_c, self.n_g, self.n_t, self.sum());
     }
 
+    #[allow(dead_code)]
     pub fn has_data(&self) -> bool {
         return self.n_a > 0 || self.n_c > 0 || self.n_g > 0 || self.n_t > 0;
     }

@@ -9,7 +9,8 @@ pub struct Params {
     pub locifile: PathBuf,
     pub minmapqual: u8,
     pub minbasequal: u8,
-    pub flags: u16,
+    pub filtered_flag: u16,
+    pub required_flag: u16,
 }
 
 impl Params {
@@ -33,45 +34,58 @@ impl Params {
                 .required(true)
                 .help("Input loci file"))
             .arg(Arg::with_name("minbasequal")
-                .short("q")
+                .short("m")
                 .long("minbasequal")
                 .takes_value(true)
                 .value_name("INT")
                 .default_value("35")
                 .help("Minimum base quality"))
             .arg(Arg::with_name("minmapqual")
-                .short("m")
+                .short("q")
                 .long("minmapqual")
                 .takes_value(true)
                 .value_name("INT")
                 .default_value("20")
                 .help("Minimum mapping quality"))
-            .arg(Arg::with_name("flags")
+            .arg(Arg::with_name("required_flag")
                 .short("f")
-                .long("flags")
+                .long("required-flag")
                 .takes_value(true)
                 .value_name("INT")
-                .default_value("1796")
-                .help("Reads matching this flag combination will be ignored (default=1796: NOT secondary, NOT optical duplicate, NOT unmapped, NOT qc failed"))
+                .default_value("3")
+                .help("Reads must match this flag combination to be counted (default=3: read paired, read mapped in proper pair"))
+            .arg(Arg::with_name("filtered_flag")
+                .short("F")
+                .long("filtered-flag")
+                .takes_value(true)
+                .value_name("INT")
+                .default_value("3852")
+                .help("Reads matching this flag combination will be ignored (default=3852: NOT read unmapped, NOT mate unmapped, NOT secondary, NOT qc failed, NOT optical duplicate, NOT supplementary"))
             .get_matches();
 
         let bamfile = matches.value_of("bamfile").unwrap();
         let locifile = matches.value_of("locifile").unwrap();
         let minmapqual = str::parse(matches.value_of("minmapqual").unwrap())
             .unwrap_or_else(|e| {
-                println!("Error parsing minmapqual as an integer: {:?}", e);
+                eprintln!("Error parsing minmapqual as an integer: {:?}", e);
                 process::exit(1);
             });
 
         let minbasequal = str::parse(matches.value_of("minbasequal").unwrap())
             .unwrap_or_else(|e| {
-                println!("Error parsing minbasequal as an integer: {:?}", e);
+                eprintln!("Error parsing minbasequal as an integer: {:?}", e);
                 process::exit(1);
             });
 
-        let flags = str::parse(matches.value_of("flags").unwrap())
+        let filtered_flag = str::parse(matches.value_of("filtered_flag").unwrap())
             .unwrap_or_else(|e| {
-                println!("Error parsing flags as an integer: {:?}", e);
+                eprintln!("Error parsing flags as an integer: {:?}", e);
+                process::exit(1);
+            });
+
+        let required_flag = str::parse(matches.value_of("required_flag").unwrap())
+            .unwrap_or_else(|e| {
+                eprintln!("Error parsing flags as an integer: {:?}", e);
                 process::exit(1);
             });
 
@@ -80,7 +94,8 @@ impl Params {
             locifile: PathBuf::from(locifile),
             minmapqual: minmapqual,
             minbasequal: minbasequal,
-            flags: flags
+            filtered_flag: filtered_flag,
+            required_flag: required_flag
         }
     }
 }

@@ -31,21 +31,25 @@ fn get_locus(line: &String) -> Locus {
     loc
 }
 
+fn read_flags_pass(read_flags: u16, required_flags: u16, filter_flags: u16) -> bool {
+    return read_flags & filter_flags == 0 && read_flags & required_flags == required_flags;
+}
+
 fn main() {
     let params = Params::parse_args();
     if !(params.bamfile.exists()) {
-        println!("Bamfile {:?} does not exist.", params.bamfile);
+        eprintln!("Bamfile {:?} does not exist.", params.bamfile);
         process::exit(1);
     }
     if !(params.locifile.exists()) {
-        println!("Locifile {:?} does not exist.", params.locifile);
+        eprintln!("Locifile {:?} does not exist.", params.locifile);
         process::exit(1);
     }
 
-    println!("Bam file = {:?}", params.bamfile);
-    println!("Loci file = {:?}", params.locifile);
-    println!("MinMapQual = {}", params.minmapqual);
-    println!("MinBaseQual = {}", params.minbasequal);
+    eprintln!("Bam file = {:?}", params.bamfile);
+    eprintln!("Loci file = {:?}", params.locifile);
+    eprintln!("MinMapQual = {}", params.minmapqual);
+    eprintln!("MinBaseQual = {}", params.minbasequal);
 
     let mut bam_reader = bam::IndexedReader::from_path(&params.bamfile)
         .expect("Error opening bam");
@@ -72,8 +76,8 @@ fn main() {
         let mut counter = BaseCounter::new();
         for record_result in bam_reader.records() {
             record = record_result.expect("Error reading record");
-            
-            if (record.flags() & params.flags == 0) && record.mapq() >= params.minmapqual {
+
+            if read_flags_pass(record.flags(), params.required_flag, params.filtered_flag) && record.mapq() >= params.minmapqual {
                 read_pos = record.cigar()
                     .read_pos(locus.position - 1, true, true)
                     .expect("Error decoding cigar");
@@ -88,13 +92,11 @@ fn main() {
                     None => 0,
                 };
 
-                if qual > params.minbasequal {
+                if qual >= params.minbasequal {
                     counter.update(base);
                 }
             }
         }
-        if counter.has_data() {
-            println!("{}\t{}\t{}", locus.chrom, locus.position, counter.write());
-        }
+        println!("{}\t{}\t{}", locus.chrom, locus.position, counter.write());
     }
 }
