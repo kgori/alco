@@ -1,82 +1,38 @@
 extern crate clap;
 extern crate rust_htslib;
 
-use clap::{App,Arg};
-
 use rust_htslib::bam;
 use rust_htslib::prelude::*;
 
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::str;
 use std::process;
 
-pub struct Params {
-    pub bamfile: PathBuf,
-    pub locifile: PathBuf,
-    pub minmapqual: u32,
-    pub minbasequal: u32,
+mod basecounter;
+use basecounter::BaseCounter;
+
+mod params;
+use params::Params;
+
+#[derive(Debug)]
+struct Locus {
+    chrom: String,
+    position: u32
 }
 
-fn parse_args() -> Params {
-    let matches = App::new("AlCo")
-        .version("1.0.0")
-        .author("Kevin Gori, kcg25@cam.ac.uk")
-        .about("Basic alleleCounter clone")
-        .arg(Arg::with_name("bamfile")
-                .short("b")
-                .long("bamfile")
-                .takes_value(true)
-                .value_name("FILE")
-                .required(true)
-                .help("Input BAM file"))
-        .arg(Arg::with_name("locifile")
-                .short("l")
-                .long("locifile")
-                .takes_value(true)
-                .value_name("FILE")
-                .required(true)
-                .help("Input loci file"))
-        .arg(Arg::with_name("minbasequal")
-                .short("q")
-                .long("minbasequal")
-                .takes_value(true)
-                .value_name("INT")
-                .default_value("35")
-                .help("Minimum base quality"))
-        .arg(Arg::with_name("minmapqual")
-                .short("m")
-                .long("minmapqual")
-                .takes_value(true)
-                .value_name("INT")
-                .default_value("20")
-                .help("Minimum mapping quality"))
-        .get_matches();
-
-    let bamfile = matches.value_of("bamfile").unwrap();
-    let locifile = matches.value_of("locifile").unwrap();
-    let minmapqual: u32 = str::parse(matches.value_of("minmapqual").unwrap())
-        .unwrap_or_else(|e| {
-            println!("Error parsing minmapqual as an integer: {:?}", e);
-            process::exit(1);
-        });
-
-    let minbasequal: u32 = str::parse(matches.value_of("minbasequal").unwrap())
-        .unwrap_or_else(|e| {
-            println!("Error parsing minbasequal as an integer: {:?}", e);
-            process::exit(1);
-        });
-
-    Params{
-        bamfile: PathBuf::from(bamfile),
-        locifile: PathBuf::from(locifile),
-        minmapqual: minmapqual,
-        minbasequal: minbasequal
-    }
+fn get_locus(line: &String) -> Locus {
+    let parts: Vec<&str> = line.split('\t').collect();
+    let pos = str::parse(parts[1]).expect("Error reading position as integer");
+    let loc = Locus{
+        chrom: String::from(parts[0]),
+        position: pos
+    };
+    loc
 }
-
 
 fn main() {
-    let params = parse_args();
+    let params = Params::parse_args();
     if !(params.bamfile.exists()) {
         println!("Bamfile {:?} does not exist.", params.bamfile);
         process::exit(1);
@@ -91,23 +47,54 @@ fn main() {
     println!("MinMapQual = {}", params.minmapqual);
     println!("MinBaseQual = {}", params.minbasequal);
 
-    let mut bam = bam::Reader::from_path(&params.bamfile).unwrap();
+    let mut bam_reader = bam::IndexedReader::from_path(&params.bamfile)
+        .expect("Error opening bam");
+    let bam_header = bam_reader.header().clone();
 
-	for p in bam.pileup() {
-		let pileup = p.unwrap();
-		println!("{}:{} depth {}", pileup.tid(), pileup.pos(), pileup.depth());
+    let f = File::open(&params.locifile)
+        .expect("Error opening locifile");
+    let f = BufReader::new(f);
+    let lines = f.lines();
 
-		for alignment in pileup.alignments() {
-			if !alignment.is_del() && !alignment.is_refskip() {
-                // println!("{:?}", str::from_utf8(&alignment.record().seq().as_bytes()).unwrap());
-                println!("Base {}", alignment.record().seq()[alignment.qpos().unwrap()] as char);
-			}
-            // // mark indel start
-			// match alignment.indel() {
-				// bam::pileup::Indel::Ins(len) => println!("Insertion of length {} between this and next position.", len),
-				// bam::pileup::Indel::Del(len) => println!("Deletion of length {} between this and next position.", len),
-				// bam::pileup::Indel::None => ()
-			// }
-		}
-	}
+    let mut locus: Locus;
+    let mut ref_id;
+    let mut record: rust_htslib::bam::Record;
+    let mut read_pos;
+
+    println!("#CHR\tPOS\tCount_A\tCount_C\tCount_G\tCount_T\tGood_depth");
+    for line in lines {
+        locus = get_locus(&line.expect("Error reading line from locifile"));
+
+        ref_id = bam_header.tid(locus.chrom.as_bytes()).expect("Error looking up chromosome");
+        bam_reader.fetch(ref_id, locus.position - 1, locus.position)
+            .expect("Error seeking bam file");
+
+        let mut counter = BaseCounter::new();
+        for record_result in bam_reader.records() {
+            record = record_result.expect("Error reading record");
+
+            if !record.is_duplicate() && record.mapq() >= params.minmapqual {
+                read_pos = record.cigar()
+                    .read_pos(locus.position - 1, true, true)
+                    .expect("Error decoding cigar");
+
+                let base = match read_pos {
+                    Some(p) => record.seq()[p as usize] as char,
+                    None => '\0',
+                };
+
+                let qual = match read_pos {
+                    Some(p) => record.qual()[p as usize],
+                    None => 0,
+                };
+
+                if qual > params.minbasequal {
+                    counter.update(base);
+                }
+            }
+        }
+        if counter.has_data() {
+            println!("{}\t{}\t{}", locus.chrom, locus.position, counter.write());
+        }
+    }
 }
