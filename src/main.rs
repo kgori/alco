@@ -72,8 +72,8 @@ fn main() {
         let mut counter = BaseCounter::new();
         for record_result in bam_reader.records() {
             record = record_result.expect("Error reading record");
-
-            if !record.is_duplicate() && record.mapq() >= params.minmapqual {
+            
+            if (record.flags() & params.flags == 0) && record.mapq() >= params.minmapqual {
                 read_pos = record.cigar()
                     .read_pos(locus.position - 1, true, true)
                     .expect("Error decoding cigar");

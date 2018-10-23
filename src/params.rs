@@ -1,6 +1,6 @@
 // All command line argument handling is done here
 
-use clap::{App,Arg};
+use clap::{App, Arg};
 use std::path::PathBuf;
 use std::process;
 
@@ -9,6 +9,7 @@ pub struct Params {
     pub locifile: PathBuf,
     pub minmapqual: u8,
     pub minbasequal: u8,
+    pub flags: u16,
 }
 
 impl Params {
@@ -45,6 +46,13 @@ impl Params {
                 .value_name("INT")
                 .default_value("20")
                 .help("Minimum mapping quality"))
+            .arg(Arg::with_name("flags")
+                .short("f")
+                .long("flags")
+                .takes_value(true)
+                .value_name("INT")
+                .default_value("1796")
+                .help("Reads matching this flag combination will be ignored (default=1796: NOT secondary, NOT optical duplicate, NOT unmapped, NOT qc failed"))
             .get_matches();
 
         let bamfile = matches.value_of("bamfile").unwrap();
@@ -61,11 +69,18 @@ impl Params {
                 process::exit(1);
             });
 
+        let flags = str::parse(matches.value_of("flags").unwrap())
+            .unwrap_or_else(|e| {
+                println!("Error parsing flags as an integer: {:?}", e);
+                process::exit(1);
+            });
+
         Params {
             bamfile: PathBuf::from(bamfile),
             locifile: PathBuf::from(locifile),
             minmapqual: minmapqual,
-            minbasequal: minbasequal
+            minbasequal: minbasequal,
+            flags: flags
         }
     }
 }
