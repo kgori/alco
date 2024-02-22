@@ -5,11 +5,23 @@ use std::{fs, path::PathBuf};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct ProgramOptions {
-    #[arg(short, long, num_args(2))]
-    pub filename: Vec<PathBuf>,
+    #[arg(short, long)]
+    pub bamfile: PathBuf,
 
     #[arg(short, long)]
-    pub csv: PathBuf,
+    pub locifile: PathBuf,
+
+    #[arg(short, long, default_value = "35")]
+    pub minmapqual: u8,
+
+    #[arg(short = 'q', long, default_value = "20")]
+    pub minbasequal: u8,
+
+    #[arg(short = 'f', long, default_value = "3")]
+    pub required_flag: u16,
+
+    #[arg(short = 'F', long, default_value = "3852")]
+    pub filtered_flag: u16,
 }
 
 fn validate_file(file: &PathBuf) {
@@ -27,9 +39,7 @@ fn validate_file(file: &PathBuf) {
 
 pub fn parse_cli() -> ProgramOptions {
     let args = ProgramOptions::parse();
-    for filename in &args.filename {
-        validate_file(filename);
-    }
-    validate_file(&args.csv);
+    validate_file(&args.bamfile);
+    validate_file(&args.locifile);
     args
 }
