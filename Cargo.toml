@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.5.1", features = ["derive"] }
 csv = "1.3.0"
-flate2 = { version = "1.0.28", features = ["zlib-ng"], default-features = false }
+flate2 = "1.0.28"
 rust-htslib = { version = "0.45.0", features = ["bzip2", "lzma"], default-features = false }
