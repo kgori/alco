@@ -5,8 +5,11 @@ use std::{fs, path::PathBuf};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct ProgramOptions {
+    #[arg(short, long, num_args(2))]
+    pub filename: Vec<PathBuf>,
+
     #[arg(short, long)]
-    pub filename: PathBuf,
+    pub csv: PathBuf,
 }
 
 fn validate_file(file: &PathBuf) {
@@ -24,6 +27,9 @@ fn validate_file(file: &PathBuf) {
 
 pub fn parse_cli() -> ProgramOptions {
     let args = ProgramOptions::parse();
-    validate_file(&args.filename);
+    for filename in &args.filename {
+        validate_file(filename);
+    }
+    validate_file(&args.csv);
     args
 }
