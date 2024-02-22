@@ -4,7 +4,7 @@ use flate2::read::MultiGzDecoder;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
-
+#[allow(dead_code)]
 pub type GzCsvRecordsResult = Result<csv::StringRecordsIntoIter<BufReader<MultiGzDecoder<File>>>, csv::Error>;
 pub type GzCsvReaderResult = Result<Reader<BufReader<MultiGzDecoder<File>>>, csv::Error>;
 
@@ -30,6 +30,7 @@ impl GzCsvReader {
         Ok(csv_reader)
     }
 
+    #[allow(dead_code)]
     pub fn records(&self) -> GzCsvRecordsResult {
         let reader = self.reader()?;
         let iterator = reader.into_records();
