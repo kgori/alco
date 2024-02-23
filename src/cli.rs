@@ -22,6 +22,9 @@ pub struct ProgramOptions {
 
     #[arg(short = 'F', long, default_value = "3852")]
     pub filtered_flag: u16,
+
+    #[arg(short = 'g', long, default_value = "1000000")]
+    pub fetch_threshold: Option<u32>,
 }
 
 fn validate_file(file: &PathBuf) {

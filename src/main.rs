@@ -122,7 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _ = process_batch(&mut bam, &vec_records);
 
     let rdr = io::LocusFile::new(&args.locifile);
-    let mut itr = io::LocusBatchIterator::new(rdr)?;
+    let mut itr = io::LocusBatchIterator::new(rdr, args.fetch_threshold)?;
     for batch in itr {
         eprintln!("{:#?} {:#?}", batch.first(), batch.last());
         let _ = process_batch(&mut bam, &batch);

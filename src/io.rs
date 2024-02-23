@@ -24,10 +24,11 @@ pub struct LocusBatchIterator {
     buffer: Vec<csv::StringRecord>,
     last_seen_chr: Option<String>,
     last_seen_pos: Option<u32>,
+    fetch_threshold: Option<u32>,
 }
 
 impl LocusBatchIterator {
-    pub(crate) fn new(locus_file: LocusFile) -> Result<LocusBatchIterator, Box<dyn Error>> {
+    pub(crate) fn new(locus_file: LocusFile, fetch_threshold: Option<u32>) -> Result<LocusBatchIterator, Box<dyn Error>> {
         let mut iterator = locus_file.records()?;
         let peek = iterator.next().transpose()?;
         Ok(
@@ -37,6 +38,7 @@ impl LocusBatchIterator {
                 buffer: vec![],
                 last_seen_chr: None,
                 last_seen_pos: None,
+                fetch_threshold: fetch_threshold,
             }
         )
     }
@@ -65,7 +67,7 @@ impl LocusBatchIterator {
                             self.last_seen_pos = None;
                             self.last_seen_chr = None;
                             break;
-                        } else if pos - self.last_seen_pos.unwrap() < GULF {
+                        } else if pos - self.last_seen_pos.unwrap() < self.fetch_threshold.or(Some(GULF)).unwrap() {
                             self.buffer.push(record.clone());
                             self.last_seen_chr.replace(chr);
                             self.last_seen_pos.replace(pos);
