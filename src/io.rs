@@ -18,10 +18,52 @@ const GULF: u32 = 1000000;
 
 use crate::errors::AcError;
 
+#[derive(Clone, Debug)]
+pub struct Variant {
+    pub chr: String,
+    pub pos: u32,
+    pub refbase: char,
+    pub altbase: char,
+}
+
+impl Variant {
+    pub fn new(chr: impl Into<String>, pos: u32, refbase: char, altbase: char) -> Self {
+        Variant {
+            chr: chr.into(),
+            pos,
+            refbase,
+            altbase,
+        }
+    }
+
+    pub fn from_csv_record(record: &csv::StringRecord) -> Result<Self, Box<dyn Error>> {
+        let chr = record.get(0).ok_or("Missing CHROM in CSV record")?.to_owned();
+        let pos: u32 = record.get(1).ok_or("Missing POS in CSV record")?.parse()?;
+        let refbase = record.get(2).ok_or("Missing REF in CSV record")?.chars().next().unwrap();
+        let altbase = record.get(3).ok_or("Missing ALT in CSV record")?.chars().next().unwrap();
+        Ok(
+            Self {
+                chr,
+                pos,
+                refbase,
+                altbase,
+            }
+        )
+    }
+
+    pub fn pos_zero_based(&self) -> u32 {
+        self.pos - 1
+    }
+
+    pub fn pos_one_based(&self) -> u32 {
+        self.pos
+    }
+}
+
 pub struct LocusBatchIterator {
     iterator: LocusFileReaderIterator,
-    peek: Option<csv::StringRecord>,
-    buffer: Vec<csv::StringRecord>,
+    peek: Option<Variant>,
+    buffer: Vec<Variant>,
     last_seen_chr: Option<String>,
     last_seen_pos: Option<u32>,
     fetch_threshold: Option<u32>,
@@ -30,15 +72,16 @@ pub struct LocusBatchIterator {
 impl LocusBatchIterator {
     pub(crate) fn new(locus_file: LocusFile, fetch_threshold: Option<u32>) -> Result<LocusBatchIterator, Box<dyn Error>> {
         let mut iterator = locus_file.records()?;
-        let peek = iterator.next().transpose()?;
+        let rec = iterator.next().transpose()?;
+        let peek = rec.map(|r| Variant::from_csv_record(&r)).transpose()?;
         Ok(
             Self {
-                iterator: iterator,
-                peek: peek,
+                iterator,
+                peek,
                 buffer: vec![],
                 last_seen_chr: None,
                 last_seen_pos: None,
-                fetch_threshold: fetch_threshold,
+                fetch_threshold,
             }
         )
     }
@@ -51,15 +94,17 @@ impl LocusBatchIterator {
 
     fn fill_buffer(&mut self) -> Result<(), Box<dyn Error>> {
         loop {
-            if let Some(record) = &self.peek {
-                let chr = record.get(0).ok_or("Missing first field")?.to_owned();
-                let pos: u32 = record.get(1).ok_or("Missing second field")?.parse()?;
+            if let Some(var) = &self.peek {
+                let chr = var.chr.to_owned();
+                let pos: u32 = var.pos_zero_based();
                 match (self.last_seen_chr.is_none(), self.last_seen_pos.is_none()) {
                     (true, true) => {
-                        self.buffer.push(record.clone());
+                        self.buffer.push(var.clone());
                         self.last_seen_chr.replace(chr);
                         self.last_seen_pos.replace(pos);
                         self.peek = self.iterator.next().transpose()?
+                            .map(|r| Variant::from_csv_record(&r))
+                            .transpose()?;
                     }
                     (false, false) => {
                         let chrom_changed = &chr != self.last_seen_chr.as_ref().unwrap();
@@ -68,10 +113,12 @@ impl LocusBatchIterator {
                             self.last_seen_chr = None;
                             break;
                         } else if pos - self.last_seen_pos.unwrap() < self.fetch_threshold.or(Some(GULF)).unwrap() {
-                            self.buffer.push(record.clone());
+                            self.buffer.push(var.clone());
                             self.last_seen_chr.replace(chr);
                             self.last_seen_pos.replace(pos);
                             self.peek = self.iterator.next().transpose()?
+                                .map(|r| Variant::from_csv_record(&r))
+                                .transpose()?;
                         } else {
                             break;
                         }
@@ -87,7 +134,7 @@ impl LocusBatchIterator {
 }
 
 impl Iterator for LocusBatchIterator {
-    type Item = Vec<csv::StringRecord>;
+    type Item = Vec<Variant>;
 
 
     fn next(&mut self) -> Option<Self::Item> {

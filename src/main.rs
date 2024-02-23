@@ -16,41 +16,42 @@ mod base_counter;
 mod errors;
 
 use base_counter::BaseCounter;
+use io::Variant;
 
-fn process_batch(bam: &mut bam::IndexedReader, csv_records: &Vec<csv::StringRecord>) -> Result<(), Box<dyn Error>> {
-    // Collect positions from CSV records
-    let mut positions: Vec<(String, u32, u32, char, char)> = Vec::new();
-    for csv_record in csv_records {
-        let ref_id = csv_record.get(0).ok_or("Missing CHROM in CSV record")?.to_owned();
-        let pos_1based: u32 = csv_record.get(1).ok_or("Missing POS in CSV record")?.parse()?;
-        let pos_0based = pos_1based - 1;
-        let refbase = csv_record.get(2).ok_or("Missing REF in CSV record")?.chars().next().unwrap();
-        let altbase = csv_record.get(3).ok_or("Missing ALT in CSV record")?.chars().next().unwrap();
-        positions.push((ref_id, pos_0based, pos_1based, refbase, altbase));
+fn process_batch(bam: &mut bam::IndexedReader, positions: &Vec<Variant>) -> Result<(), Box<dyn Error>> {
+    if positions.is_empty() {
+        return Ok(());
     }
 
     // Determine the minimum and maximum positions
-    let min_pos = *positions.iter().map(|(_, pos, _, _, _)| pos).min().unwrap();
-    let max_pos = *positions.iter().map(|(_, _, pos, _, _)| pos).max().unwrap();
+    let chr = positions.first().map(|p| &p.chr).unwrap();
+    let min_pos = positions.first().map(|p| p.pos_zero_based()).unwrap();
+    let max_pos = positions.last().map(|p| p.pos_one_based()).unwrap();
 
-    bam.fetch((&positions[0].0, min_pos, max_pos))?;
+    bam.fetch((chr, min_pos, max_pos))?;
 
     let mut pileup = bam.pileup();
     let mut pileup_col = pileup.next().ok_or("No next position in pileup")??;
 
     // Process pileup for each CSV record in the batch
-    for (ref_id, pos_0based, pos_1based, refbase, altbase) in positions.iter() {
-        let mut counts = BaseCounter::new(*refbase, *altbase);
+    for position in positions.iter() {
+        let ref_id = &position.chr;
+        let pos_0based = position.pos_zero_based();
+        let pos_1based = position.pos_one_based();
+        let refbase = position.refbase;
+        let altbase = position.altbase;
 
-        if pileup_col.pos() > *pos_0based {
+        let mut counts = BaseCounter::new(refbase, altbase);
+
+        if pileup_col.pos() > pos_0based {
             continue;
         }
 
-        while pileup_col.pos() < *pos_0based {
+        while pileup_col.pos() < pos_0based {
             pileup_col = pileup.next().ok_or("No next position in pileup")??;
         }
 
-        if pileup_col.pos() == *pos_0based {
+        if pileup_col.pos() == pos_0based {
             for aln in pileup_col.alignments() {
                 let mapping_quality = aln.record().mapq();
                 let qpos = aln.qpos();
@@ -102,31 +103,14 @@ fn process_record(bam: &mut bam::IndexedReader, csv_record: csv::StringRecord) -
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Would like to replace the following with `let args = parse_cli()
     let args = cli::parse_cli();
-
-    let csv_reader = io::LocusFile::new(&args.locifile)
-        .reader()?;
     let mut bam = bam::IndexedReader::from_path(&args.bamfile)?;
-    let header = bam.header().clone();
-
-    let mut curr_ref = std::str::from_utf8(header.tid2name(0))?.to_owned();
-    bam.fetch(&curr_ref)?;
-
-    let vec_records: Vec<csv::StringRecord> = io::LocusFile::new(&args.locifile)
-        .records()?
-        .take(10)
-        .collect::<Result<Vec<_>, _>>()?;
-
-    println!("CHROM\tPOS\tREF\tALT\tA\tC\tG\tT\tNREF\tNALT");
-    let _ = process_batch(&mut bam, &vec_records);
-
     let rdr = io::LocusFile::new(&args.locifile);
     let mut itr = io::LocusBatchIterator::new(rdr, args.fetch_threshold)?;
+
+    println!("CHROM\tPOS\tREF\tALT\tA\tC\tG\tT\tNREF\tNALT");
     for batch in itr {
-        eprintln!("{:#?} {:#?}", batch.first(), batch.last());
         let _ = process_batch(&mut bam, &batch);
     }
-
     Ok(())
 }
