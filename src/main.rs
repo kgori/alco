@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 #![allow(unused_mut)]
 #![allow(unused_variables)]
+#![allow(dead_code)]
 
 use std::error::Error;
 use std::io::BufRead;
@@ -14,7 +15,66 @@ mod io;
 mod base_counter;
 use base_counter::BaseCounter;
 
-fn process_record(bam: &mut bam::IndexedReader, csv_record: ::csv::StringRecord) -> Result<(), Box<dyn Error>> {
+fn process_batch(bam: &mut bam::IndexedReader, csv_records: &Vec<csv::StringRecord>) -> Result<(), Box<dyn Error>> {
+    // Collect positions from CSV records
+    let mut positions: Vec<(String, u32, u32, char, char)> = Vec::new();
+    for csv_record in csv_records {
+        let ref_id = csv_record.get(0).ok_or("Missing CHROM in CSV record")?.to_owned();
+        let pos_1based: u32 = csv_record.get(1).ok_or("Missing POS in CSV record")?.parse()?;
+        let pos_0based = pos_1based - 1;
+        let refbase = csv_record.get(2).ok_or("Missing REF in CSV record")?.chars().next().unwrap();
+        let altbase = csv_record.get(3).ok_or("Missing ALT in CSV record")?.chars().next().unwrap();
+        positions.push((ref_id, pos_0based, pos_1based, refbase, altbase));
+    }
+
+    // Determine the minimum and maximum positions
+    let min_pos = *positions.iter().map(|(_, pos, _, _, _)| pos).min().unwrap();
+    let max_pos = *positions.iter().map(|(_, _, pos, _, _)| pos).max().unwrap();
+
+    dbg!(min_pos);
+    dbg!(max_pos);
+
+    bam.fetch((&positions[0].0, min_pos, max_pos))?;
+
+    let mut pileup = bam.pileup();
+    let mut pileup_col = pileup.next().ok_or("No next position in pileup")??;
+
+    // Process pileup for each CSV record in the batch
+    for (ref_id, pos_0based, pos_1based, refbase, altbase) in positions.iter() {
+        let mut counts = BaseCounter::new(*refbase, *altbase);
+
+        // dbg!(&pileup_col.pos());
+        // dbg!(*pos_0based);
+
+        if pileup_col.pos() > *pos_0based {
+            continue;
+        }
+
+        while pileup_col.pos() < *pos_0based {
+            pileup_col = pileup.next().ok_or("No next position in pileup")??;
+        }
+        // dbg!(&pileup_col.pos());
+
+        if pileup_col.pos() == *pos_0based {
+            for aln in pileup_col.alignments() {
+                let mapping_quality = aln.record().mapq();
+                let qpos = aln.qpos();
+                if let Some(i) = qpos {
+                    let base_qual = aln.record().qual()[i];
+                    let base = *aln.record().seq().index(i) as char;
+                    if mapping_quality > 30 && base_qual > 15 {
+                        counts.add(base);
+                    }
+                }
+            }
+        }
+        println!("{ref_id}\t{pos_1based}\t{refbase}\t{altbase}\t{counts}");
+    }
+
+    Ok(())
+}
+
+fn process_record(bam: &mut bam::IndexedReader, csv_record: csv::StringRecord) -> Result<(), Box<dyn Error>> {
     let ref_id = csv_record.get(0).ok_or("Missing CHROM in CSV record")?.to_owned();
     let pos_1based: u32 = csv_record.get(1).ok_or("Missing POS in CSV record")?.parse()?;
     let pos_0based = pos_1based - 1;
@@ -57,10 +117,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut curr_ref = std::str::from_utf8(header.tid2name(0))?.to_owned();
     bam.fetch(&curr_ref)?;
-    //let mut pileup = bam.pileup();
 
-    for record in csv_reader.into_records().take(1000) {
-        process_record(&mut bam, record?)?;
-    }
+    let vec_records: Vec<csv::StringRecord> = csv_reader
+        .into_records()
+        .take(1000)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    println!("CHROM\tPOS\tREF\tALT\tA\tC\tG\tT\tNREF\tNALT");
+    let _ = process_batch(&mut bam, &vec_records);
+
     Ok(())
 }
