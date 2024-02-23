@@ -13,6 +13,8 @@ mod cli;
 mod io;
 
 mod base_counter;
+mod errors;
+
 use base_counter::BaseCounter;
 
 fn process_batch(bam: &mut bam::IndexedReader, csv_records: &Vec<csv::StringRecord>) -> Result<(), Box<dyn Error>> {
@@ -31,9 +33,6 @@ fn process_batch(bam: &mut bam::IndexedReader, csv_records: &Vec<csv::StringReco
     let min_pos = *positions.iter().map(|(_, pos, _, _, _)| pos).min().unwrap();
     let max_pos = *positions.iter().map(|(_, _, pos, _, _)| pos).max().unwrap();
 
-    dbg!(min_pos);
-    dbg!(max_pos);
-
     bam.fetch((&positions[0].0, min_pos, max_pos))?;
 
     let mut pileup = bam.pileup();
@@ -43,9 +42,6 @@ fn process_batch(bam: &mut bam::IndexedReader, csv_records: &Vec<csv::StringReco
     for (ref_id, pos_0based, pos_1based, refbase, altbase) in positions.iter() {
         let mut counts = BaseCounter::new(*refbase, *altbase);
 
-        // dbg!(&pileup_col.pos());
-        // dbg!(*pos_0based);
-
         if pileup_col.pos() > *pos_0based {
             continue;
         }
@@ -53,7 +49,6 @@ fn process_batch(bam: &mut bam::IndexedReader, csv_records: &Vec<csv::StringReco
         while pileup_col.pos() < *pos_0based {
             pileup_col = pileup.next().ok_or("No next position in pileup")??;
         }
-        // dbg!(&pileup_col.pos());
 
         if pileup_col.pos() == *pos_0based {
             for aln in pileup_col.alignments() {
@@ -110,7 +105,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Would like to replace the following with `let args = parse_cli()
     let args = cli::parse_cli();
 
-    let csv_reader = io::LocusFileReader::new(&args.locifile)
+    let csv_reader = io::LocusFile::new(&args.locifile)
         .reader()?;
     let mut bam = bam::IndexedReader::from_path(&args.bamfile)?;
     let header = bam.header().clone();
@@ -118,13 +113,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut curr_ref = std::str::from_utf8(header.tid2name(0))?.to_owned();
     bam.fetch(&curr_ref)?;
 
-    let vec_records: Vec<csv::StringRecord> = csv_reader
-        .into_records()
-        .take(1000)
+    let vec_records: Vec<csv::StringRecord> = io::LocusFile::new(&args.locifile)
+        .records()?
+        .take(10)
         .collect::<Result<Vec<_>, _>>()?;
 
     println!("CHROM\tPOS\tREF\tALT\tA\tC\tG\tT\tNREF\tNALT");
     let _ = process_batch(&mut bam, &vec_records);
+
+    let rdr = io::LocusFile::new(&args.locifile);
+    let mut itr = io::LocusBatchIterator::new(rdr)?;
+    for batch in itr {
+        eprintln!("{:#?} {:#?}", batch.first(), batch.last());
+        let _ = process_batch(&mut bam, &batch);
+    }
 
     Ok(())
 }
