@@ -1,12 +1,10 @@
 use csv::Reader;
 use flate2::read::MultiGzDecoder;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::BufReader;
 use std::path::PathBuf;
 use std::error::Error;
-use std::fmt;
 
-#[allow(dead_code)]
 pub type LocusFileRecords = csv::StringRecordsIntoIter<BufReader<MultiGzDecoder<File>>>;
 pub type LocusFileRecordsResult = Result<LocusFileRecords, csv::Error>;
 pub type LocusFileReader = Reader<BufReader<MultiGzDecoder<File>>>;
@@ -27,15 +25,6 @@ pub struct Variant {
 }
 
 impl Variant {
-    pub fn new(chr: impl Into<String>, pos: u32, refbase: char, altbase: char) -> Self {
-        Variant {
-            chr: chr.into(),
-            pos,
-            refbase,
-            altbase,
-        }
-    }
-
     pub fn from_csv_record(record: &csv::StringRecord) -> Result<Self, Box<dyn Error>> {
         let chr = record.get(0).ok_or("Missing CHROM in CSV record")?.to_owned();
         let pos: u32 = record.get(1).ok_or("Missing POS in CSV record")?.parse()?;
@@ -175,7 +164,6 @@ impl LocusFile {
         Ok(csv_reader)
     }
 
-    #[allow(dead_code)]
     pub fn records(&self) -> LocusFileRecordsResult {
         let reader = self.reader()?;
         let iterator = reader.into_records();

@@ -1,6 +1,6 @@
 use clap::{CommandFactory, Parser};
 use clap::error::ErrorKind;
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
