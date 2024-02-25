@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("CHROM\tPOS\tREF\tALT\tA\tC\tG\tT\tNREF\tNALT");
     for batch in batch_iterator {
-        let _ = process_batch(&mut bam, &batch);
+        process_batch(&mut bam, &batch)?;
     }
     Ok(())
 }
