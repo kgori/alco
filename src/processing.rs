@@ -18,6 +18,10 @@ pub fn process_batch(bam: &mut bam::IndexedReader, positions: &Vec<Variant>) -> 
     bam.fetch((chr, min_pos, max_pos))?;
     let mut pileup = bam.pileup();
 
+    // Set this to true if the pileup iterator gets exhausted at any point
+    // It signals to print zero counts at all remaining batch positions
+    let mut drain = false;
+
     if let Some(result) = pileup.next() {
         let mut pileup_col = result?;
 
@@ -30,13 +34,21 @@ pub fn process_batch(bam: &mut bam::IndexedReader, positions: &Vec<Variant>) -> 
             let altbase = position.altbase;
             let mut counts = BaseCounter::new(refbase, altbase);
 
-            if pileup_col.pos() > pos_0based {
+            if drain || pileup_col.pos() > pos_0based {
                 println!("{ref_id}\t{pos_1based}\t{refbase}\t{altbase}\t{counts}");
                 continue;
             }
 
             while pileup_col.pos() < pos_0based {
-                pileup_col = pileup.next().ok_or("No next position in pileup")??;
+                let peek = pileup.next();
+                if let Some(more_data) = peek {
+                    pileup_col = more_data?;
+                }
+                else {
+                    drain = true;
+                    assert!(pileup_col.pos() != pos_0based);
+                    break;
+                }
             }
 
             if pileup_col.pos() == pos_0based {
