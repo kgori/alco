@@ -10,6 +10,7 @@ mod processing;
 
 use processing::process_batch;
 
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args = cli::parse_cli();
     let mut bam = bam::IndexedReader::from_path(&args.bamfile)?;
@@ -18,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("CHROM\tPOS\tREF\tALT\tA\tC\tG\tT\tNREF\tNALT");
     for batch in batch_iterator {
-        process_batch(&mut bam, &batch)?;
+        process_batch(&mut bam, &batch, &args)?;
     }
     Ok(())
 }
