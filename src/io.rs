@@ -98,7 +98,7 @@ impl Iterator for LocusBatchIterator {
         if self.peek.is_none() {
             return None;
         }
-        let _ = self.fill_buffer().unwrap();
+        self.fill_buffer().unwrap();
 
         if self.buffer.is_empty() {
             return None;

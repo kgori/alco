@@ -1,6 +1,6 @@
 use clap::{CommandFactory, Parser};
 use clap::error::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -27,7 +27,7 @@ pub struct ProgramOptions {
     pub fetch_threshold: Option<u32>,
 }
 
-fn validate_file(file: &PathBuf) {
+fn validate_file(file: &Path) {
     if !file.exists() {
         let mut cmd = ProgramOptions::command();
         cmd.error(
