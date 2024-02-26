@@ -12,8 +12,6 @@ pub type LocusFileReaderResult = Result<LocusFileReader, csv::Error>;
 
 pub type LocusFileReaderIterator = csv::StringRecordsIntoIter<BufReader<MultiGzDecoder<File>>>;
 
-const GULF: u32 = 1000000;
-
 use crate::errors::AcError;
 use crate::variant::Variant;
 
@@ -69,7 +67,7 @@ impl LocusBatchIterator {
                             self.last_seen_pos = None;
                             self.last_seen_chr = None;
                             break;
-                        } else if pos - self.last_seen_pos.unwrap() < self.fetch_threshold.or(Some(GULF)).unwrap() {
+                        } else if pos - self.last_seen_pos.unwrap() < self.fetch_threshold.unwrap() {
                             self.buffer.push(var.clone());
                             self.last_seen_chr.replace(chr);
                             self.last_seen_pos.replace(pos);
