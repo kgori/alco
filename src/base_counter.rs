@@ -34,14 +34,18 @@ impl BaseCounter {
         if base == self.ref_base { self.ref_count += 1; }
         if base == self.alt_base { self.alt_count += 1; }
     }
+
+    pub fn total(&self) -> u32 {
+        self.a_count + self.c_count + self.g_count + self.t_count
+    }
 }
 
 impl std::fmt::Display for BaseCounter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\t{}\t{}\t{}\t{}\t{}",
-            self.a_count, self.c_count, self.g_count, self.t_count, self.ref_count, self.alt_count
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            self.total(), self.a_count, self.c_count, self.g_count, self.t_count, self.ref_count, self.alt_count
         )
     }
 }

@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let locus_file = io::LocusFile::new(&args.locifile);
     let batch_iterator = io::LocusBatchIterator::new(locus_file, args.fetch_threshold)?;
 
-    println!("CHROM\tPOS\tREF\tALT\tA\tC\tG\tT\tNREF\tNALT");
+    println!("CHROM\tPOS\tREF\tALT\tTOTAL\tA\tC\tG\tT\tNREF\tNALT");
     for batch in batch_iterator {
         process_batch(&mut bam, &batch, &args)?;
     }
