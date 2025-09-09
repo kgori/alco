@@ -1,14 +1,20 @@
-use std::error::Error;
-use rust_htslib::bam::{self, Read};
 use crate::base_counter::BaseCounter;
+use crate::cli::ProgramOptions;
+use crate::errors::AcError;
 use crate::variant::Variant;
 use core::ops::Index;
-use crate::errors::AcError;
-use crate::cli::ProgramOptions;
+use rust_htslib::bam::{self, Read};
+use std::error::Error;
 
-pub fn process_batch(bam: &mut bam::IndexedReader, positions: &Vec<Variant>, args: &ProgramOptions) -> Result<(), Box<dyn Error>> {
+pub fn process_batch(
+    bam: &mut bam::IndexedReader,
+    positions: &Vec<Variant>,
+    args: &ProgramOptions,
+) -> Result<(), Box<dyn Error>> {
     if positions.is_empty() {
-        return Err(Box::new(AcError { message: "Wasn't expecting an empty batch...".to_string() }))
+        return Err(Box::new(AcError {
+            message: "Wasn't expecting an empty batch...".to_string(),
+        }));
     }
 
     // Determine the minimum and maximum positions
@@ -44,8 +50,7 @@ pub fn process_batch(bam: &mut bam::IndexedReader, positions: &Vec<Variant>, arg
                 let peek = pileup.next();
                 if let Some(more_data) = peek {
                     pileup_col = more_data?;
-                }
-                else {
+                } else {
                     drain = true;
                     assert!(pileup_col.pos() != pos_0based);
                     break;
@@ -57,11 +62,15 @@ pub fn process_batch(bam: &mut bam::IndexedReader, positions: &Vec<Variant>, arg
                     let mapping_quality = aln.record().mapq();
                     let qpos = aln.qpos();
                     let flags = aln.record().flags();
-                    let flags_pass = flags & args.required_flag != 0 && flags & args.filtered_flag == 0;
+                    let required_flags_pass =
+                        args.required_flag == 0 || flags & args.required_flag != 0;
+                    let filtered_flags_pass = flags & args.filtered_flag == 0;
+                    let flags_pass = required_flags_pass && filtered_flags_pass;
                     if let Some(i) = qpos {
                         let base_qual = aln.record().qual()[i];
                         let base = *aln.record().seq().index(i) as char;
-                        let quals_pass = mapping_quality >= args.minmapqual && base_qual >= args.minbasequal;
+                        let quals_pass =
+                            mapping_quality >= args.minmapqual && base_qual >= args.minbasequal;
                         if flags_pass && quals_pass {
                             counts.add(base);
                         }
