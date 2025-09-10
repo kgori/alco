@@ -24,6 +24,7 @@ pub fn process_batch(
 
     bam.fetch((chr, min_pos, max_pos))?;
     let mut pileup = bam.pileup();
+    pileup.set_max_depth(i32::MAX as u32);
 
     // Set this to true if the pileup iterator gets exhausted at any point
     // It signals to print zero counts at all remaining batch positions
