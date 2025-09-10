@@ -1,16 +1,16 @@
 use csv::Reader;
 use flate2::read::MultiGzDecoder;
-use std::fs::File;
-use std::io::BufReader;
-use std::path::PathBuf;
 use std::error::Error;
+use std::fs::File;
+use std::io::{BufReader, Read, Seek};
+use std::path::PathBuf;
 
-pub type LocusFileRecords = csv::StringRecordsIntoIter<BufReader<MultiGzDecoder<File>>>;
+pub type LocusFileRecords = csv::StringRecordsIntoIter<BufReader<Box<dyn Read>>>;
 pub type LocusFileRecordsResult = Result<LocusFileRecords, csv::Error>;
-pub type LocusFileReader = Reader<BufReader<MultiGzDecoder<File>>>;
+pub type LocusFileReader = Reader<BufReader<Box<dyn Read>>>;
 pub type LocusFileReaderResult = Result<LocusFileReader, csv::Error>;
 
-pub type LocusFileReaderIterator = csv::StringRecordsIntoIter<BufReader<MultiGzDecoder<File>>>;
+pub type LocusFileReaderIterator = csv::StringRecordsIntoIter<BufReader<Box<dyn Read>>>;
 
 use crate::errors::AcError;
 use crate::variant::Variant;
@@ -25,20 +25,21 @@ pub struct LocusBatchIterator {
 }
 
 impl LocusBatchIterator {
-    pub(crate) fn new(locus_file: LocusFile, fetch_threshold: Option<u32>) -> Result<LocusBatchIterator, Box<dyn Error>> {
+    pub(crate) fn new(
+        locus_file: LocusFile,
+        fetch_threshold: Option<u32>,
+    ) -> Result<LocusBatchIterator, Box<dyn Error>> {
         let mut iterator = locus_file.records()?;
         let rec = iterator.next().transpose()?;
         let peek = rec.map(|r| Variant::from_csv_record(&r)).transpose()?;
-        Ok(
-            Self {
-                iterator,
-                peek,
-                buffer: vec![],
-                last_seen_chr: None,
-                last_seen_pos: None,
-                fetch_threshold,
-            }
-        )
+        Ok(Self {
+            iterator,
+            peek,
+            buffer: vec![],
+            last_seen_chr: None,
+            last_seen_pos: None,
+            fetch_threshold,
+        })
     }
 
     fn empty_buffer(&mut self) {
@@ -57,7 +58,10 @@ impl LocusBatchIterator {
                         self.buffer.push(var.clone());
                         self.last_seen_chr.replace(chr);
                         self.last_seen_pos.replace(pos);
-                        self.peek = self.iterator.next().transpose()?
+                        self.peek = self
+                            .iterator
+                            .next()
+                            .transpose()?
                             .map(|r| Variant::from_csv_record(&r))
                             .transpose()?;
                     }
@@ -67,18 +71,26 @@ impl LocusBatchIterator {
                             self.last_seen_pos = None;
                             self.last_seen_chr = None;
                             break;
-                        } else if pos - self.last_seen_pos.unwrap() < self.fetch_threshold.unwrap() {
+                        } else if pos - self.last_seen_pos.unwrap() < self.fetch_threshold.unwrap()
+                        {
                             self.buffer.push(var.clone());
                             self.last_seen_chr.replace(chr);
                             self.last_seen_pos.replace(pos);
-                            self.peek = self.iterator.next().transpose()?
+                            self.peek = self
+                                .iterator
+                                .next()
+                                .transpose()?
                                 .map(|r| Variant::from_csv_record(&r))
                                 .transpose()?;
                         } else {
                             break;
                         }
                     }
-                    _ => return Err(Box::new(AcError { message: "Iterator out of sync".to_string() })),
+                    _ => {
+                        return Err(Box::new(AcError {
+                            message: "Iterator out of sync".to_string(),
+                        }))
+                    }
                 }
             } else {
                 break;
@@ -90,7 +102,6 @@ impl LocusBatchIterator {
 
 impl Iterator for LocusBatchIterator {
     type Item = Vec<Variant>;
-
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.peek.is_none() {
@@ -120,9 +131,26 @@ impl LocusFile {
         }
     }
 
+    fn open_reader(&self) -> Result<Box<dyn Read>, std::io::Error> {
+        let mut file = File::open(&self.file_path)?;
+
+        // Sniff first two bytes, looking for gzip signature
+        let mut buf = [0u8; 2];
+        let n = file.read(&mut buf)?;
+        file.rewind()?;
+
+        let reader: Box<dyn Read> = if n == 2 && buf == [0x1f, 0x8b] {
+            Box::new(MultiGzDecoder::new(file))
+        } else {
+            Box::new(file)
+        };
+
+        Ok(reader)
+    }
+
     pub fn reader(&self) -> LocusFileReaderResult {
-        let file = File::open(&self.file_path)?;
-        let buf_reader = BufReader::new(MultiGzDecoder::new(file));
+        let reader = self.open_reader()?;
+        let buf_reader = BufReader::new(reader);
         let csv_reader = csv::ReaderBuilder::new()
             .delimiter(b'\t')
             .has_headers(true)
