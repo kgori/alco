@@ -89,7 +89,7 @@ impl LocusBatchIterator {
                     _ => {
                         return Err(Box::new(AcError {
                             message: "Iterator out of sync".to_string(),
-                        }))
+                        }));
                     }
                 }
             } else {
@@ -162,5 +162,83 @@ impl LocusFile {
         let reader = self.reader()?;
         let iterator = reader.into_records();
         Ok(iterator)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    fn write_plain_csv() -> NamedTempFile {
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "chr\tpos\tref\talt").unwrap();
+        writeln!(file, "1\t100\tA\tG").unwrap();
+        writeln!(file, "1\t200\tC\tT").unwrap();
+        file
+    }
+
+    fn write_gzipped_csv() -> NamedTempFile {
+        let file = NamedTempFile::new().unwrap();
+        {
+            let mut encoder = GzEncoder::new(&file, Compression::default());
+            writeln!(encoder, "chr\tpos\tref\talt").unwrap();
+            writeln!(encoder, "1\t100\tA\tG").unwrap();
+            writeln!(encoder, "1\t200\tC\tT").unwrap();
+            writeln!(encoder, "2\t300\tG\tA").unwrap();
+            encoder.finish().unwrap();
+        }
+        file
+    }
+
+    #[test]
+    fn test_read_plain_csv() {
+        let file = write_plain_csv();
+        let locus_file = LocusFile::new(file.path());
+        let mut records = locus_file.records().unwrap();
+
+        let r1 = records.next().unwrap().unwrap();
+        assert_eq!(r1.get(0).unwrap(), "1");
+        assert_eq!(r1.get(1).unwrap(), "100");
+        assert_eq!(r1.get(2).unwrap(), "A");
+        assert_eq!(r1.get(3).unwrap(), "G");
+
+        let r2 = records.next().unwrap().unwrap();
+        assert_eq!(r2.get(0).unwrap(), "1");
+        assert_eq!(r2.get(1).unwrap(), "200");
+        assert_eq!(r2.get(2).unwrap(), "C");
+        assert_eq!(r2.get(3).unwrap(), "T");
+
+        assert!(records.next().is_none());
+    }
+
+    #[test]
+    fn test_read_gzipped_csv() {
+        let file = write_gzipped_csv();
+        let locus_file = LocusFile::new(file.path());
+        let mut records = locus_file.records().unwrap();
+
+        let r1 = records.next().unwrap().unwrap();
+        assert_eq!(r1.get(0).unwrap(), "1");
+        assert_eq!(r1.get(1).unwrap(), "100");
+        assert_eq!(r1.get(2).unwrap(), "A");
+        assert_eq!(r1.get(3).unwrap(), "G");
+
+        let r2 = records.next().unwrap().unwrap();
+        assert_eq!(r2.get(0).unwrap(), "1");
+        assert_eq!(r2.get(1).unwrap(), "200");
+        assert_eq!(r2.get(2).unwrap(), "C");
+        assert_eq!(r2.get(3).unwrap(), "T");
+
+        let r3 = records.next().unwrap().unwrap();
+        assert_eq!(r3.get(0).unwrap(), "2");
+        assert_eq!(r3.get(1).unwrap(), "300");
+        assert_eq!(r3.get(2).unwrap(), "G");
+        assert_eq!(r3.get(3).unwrap(), "A");
+
+        assert!(records.next().is_none());
     }
 }
