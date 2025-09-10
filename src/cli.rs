@@ -1,5 +1,5 @@
-use clap::{CommandFactory, Parser};
 use clap::error::ErrorKind;
+use clap::{CommandFactory, Parser};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
@@ -23,8 +23,11 @@ pub struct ProgramOptions {
     #[arg(short = 'F', long, default_value = "3852")]
     pub filtered_flag: u16,
 
-    #[arg(short = 'g', long, default_value = "10000")]
+    #[arg(short = 'g', long, default_value = "100000")]
     pub fetch_threshold: Option<u32>,
+
+    #[arg(short = 'd', long, default_value = "2147483647")] // i32::MAX
+    pub max_depth: u32,
 }
 
 fn validate_file(file: &Path) {
@@ -32,11 +35,9 @@ fn validate_file(file: &Path) {
         let mut cmd = ProgramOptions::command();
         cmd.error(
             ErrorKind::ValueValidation,
-            format!(
-                "file `{}` not found",
-                file.display()
-            ),
-        ).exit();
+            format!("file `{}` not found", file.display()),
+        )
+        .exit();
     }
 }
 

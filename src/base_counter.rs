@@ -19,7 +19,7 @@ impl BaseCounter {
             ref_count: 0,
             alt_count: 0,
             ref_base,
-            alt_base
+            alt_base,
         }
     }
 
@@ -31,8 +31,12 @@ impl BaseCounter {
             'T' => self.t_count += 1,
             _ => (),
         }
-        if base == self.ref_base { self.ref_count += 1; }
-        if base == self.alt_base { self.alt_count += 1; }
+        if base == self.ref_base {
+            self.ref_count += 1;
+        }
+        if base == self.alt_base {
+            self.alt_count += 1;
+        }
     }
 
     pub fn total(&self) -> u32 {
@@ -45,7 +49,13 @@ impl std::fmt::Display for BaseCounter {
         write!(
             f,
             "{}\t{}\t{}\t{}\t{}\t{}\t{}",
-            self.total(), self.a_count, self.c_count, self.g_count, self.t_count, self.ref_count, self.alt_count
+            self.total(),
+            self.a_count,
+            self.c_count,
+            self.g_count,
+            self.t_count,
+            self.ref_count,
+            self.alt_count
         )
     }
 }

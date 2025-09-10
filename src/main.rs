@@ -1,15 +1,14 @@
-use std::error::Error;
 use rust_htslib::bam;
+use std::error::Error;
 
-mod cli;
-mod io;
 mod base_counter;
+mod cli;
 mod errors;
-mod variant;
+mod io;
 mod processing;
+mod variant;
 
 use processing::process_batch;
-
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = cli::parse_cli();
