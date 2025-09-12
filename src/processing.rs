@@ -63,9 +63,8 @@ pub fn process_batch(
                     let mapping_quality = aln.record().mapq();
                     let qpos = aln.qpos();
                     let flags = aln.record().flags();
-                    let required_flags_pass =
-                        args.required_flag == 0 || flags & args.required_flag != 0;
-                    let filtered_flags_pass = flags & args.filtered_flag == 0;
+                    let required_flags_pass = (flags & args.required_flag) == args.required_flag;
+                    let filtered_flags_pass = (flags & args.filtered_flag) == 0;
                     let flags_pass = required_flags_pass && filtered_flags_pass;
                     if let Some(i) = qpos {
                         let base_qual = aln.record().qual()[i];
