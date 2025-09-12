@@ -70,7 +70,7 @@ pub fn process_batch(
                         let base_qual = aln.record().qual()[i];
                         let base = *aln.record().seq().index(i) as char;
                         let quals_pass =
-                            mapping_quality >= args.minmapqual && base_qual >= args.minbasequal;
+                            mapping_quality >= args.min_map_qual && base_qual >= args.min_base_qual;
                         if flags_pass && quals_pass {
                             counts.add(base);
                         }

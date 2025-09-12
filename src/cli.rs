@@ -11,11 +11,11 @@ pub struct ProgramOptions {
     #[arg(short, long)]
     pub locifile: PathBuf,
 
-    #[arg(short, long, default_value = "35")]
-    pub minmapqual: u8,
+    #[arg(short = 'm', long, default_value = "20")]
+    pub min_base_qual: u8,
 
-    #[arg(short = 'q', long, default_value = "20")]
-    pub minbasequal: u8,
+    #[arg(short = 'q', long, default_value = "35")]
+    pub min_map_qual: u8,
 
     #[arg(short = 'f', long, default_value = "3")]
     pub required_flag: u16,
