@@ -6,6 +6,8 @@ use core::ops::Index;
 use rust_htslib::bam::{self, Read};
 use std::error::Error;
 
+static PROPER_PAIR_FLAG: u16 = 0x2;
+
 pub fn process_batch(
     bam: &mut bam::IndexedReader,
     positions: &Vec<Variant>,
@@ -65,13 +67,21 @@ pub fn process_batch(
                     let flags = aln.record().flags();
                     let required_flags_pass = (flags & args.required_flag) == args.required_flag;
                     let filtered_flags_pass = (flags & args.filtered_flag) == 0;
-                    let flags_pass = required_flags_pass && filtered_flags_pass;
+                    let map_qual_pass = mapping_quality >= args.min_map_qual;
+                    if (!map_qual_pass) || (!filtered_flags_pass) || (!required_flags_pass) {
+                        continue;
+                    }
+                    // alleleCounter has an extra check for proper pairs,
+                    // reproduced here. But it's probably redundant, right?
+                    if args.required_flag & PROPER_PAIR_FLAG != 0 {
+                        if aln.record().is_reverse() == aln.record().is_mate_reverse() {
+                            continue;
+                        }
+                    }
                     if let Some(i) = qpos {
                         let base_qual = aln.record().qual()[i];
-                        let base = *aln.record().seq().index(i) as char;
-                        let quals_pass =
-                            mapping_quality >= args.min_map_qual && base_qual >= args.min_base_qual;
-                        if flags_pass && quals_pass {
+                        if base_qual >= args.min_base_qual {
+                            let base = *aln.record().seq().index(i) as char;
                             counts.add(base);
                         }
                     }
